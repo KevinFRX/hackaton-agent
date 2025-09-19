@@ -1,13 +1,9 @@
 import os
 import google.auth
-import google.auth.transport.requests
 from googleapiclient.discovery import build
 import uuid
 
-# --- Variables de entorno ---
-# IDs de las carpetas que quieres monitorear (separados por comas)
 FOLDER_IDS = os.environ.get("FOLDER_IDS", "").split(',')
-# La URL pública de tu servicio de Cloud Run
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]

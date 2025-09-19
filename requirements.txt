@@ -1,5 +1,11 @@
 python-dotenv
-google-adk==1.14.0
+google-adk
 litellm
 requests
 google-cloud-aiplatform
+google-auth
+google-api-python-client
+uvicorn
+google-cloud-aiplatform[agent_engines]
+pydantic
+Flask

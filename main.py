@@ -2,51 +2,60 @@ import asyncio
 import requests
 import json
 import os
-from dotenv import load_dotenv
+import logging
+import google.auth
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 from google.adk.agents import LlmAgent
 from vertexai.preview.reasoning_engines import AdkApp
+from dotenv import load_dotenv
 
 # Carga segura de variables de entorno
 load_dotenv()
-SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
-GOOGLE_DOCS_ID = os.environ.get("GOOGLE_DOCS_ID")
-SLACK_CANVAS_ID = os.environ.get("SLACK_CANVAS_ID")
-SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
+logging.basicConfig(level=logging.INFO)
 
-# --- 1. Herramienta para leer Google Docs ---
+# --- Variables de entorno ---
+SLACK_API_TOKEN = os.environ.get("SLACK_API_TOKEN")
+SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
+SLACK_CANVAS_ID = os.environ.get("SLACK_CANVAS_ID")
+GOOGLE_DOCS_ID = os.environ.get("GOOGLE_DOCS_ID")
+
+# --- Herramienta para leer Google Docs ---
 def get_notes_from_google_docs(document_id: str) -> str:
     """
     Lee y devuelve el contenido de un documento de Google Docs.
-
+    
     Args:
         document_id: El ID del documento de Google Docs.
     
     Returns:
-        Una cadena de texto con el contenido del documento.
+        Una cadena de texto con el contenido del documento, incluyendo el título.
     """
-    print(f"Llamando a la API de Google Docs para leer el documento con ID: {document_id}")
-    sample_content = """
-    TÍTULO DE LA REUNIÓN: KickOff con el cliente
-    Resumen de la reunión del equipo:
-    - Estado del proyecto X: En curso, sin retrasos.
-    - Tareas pendientes:
-        - Tarea 1: Actualizar el reporte de ventas. (Responsable: Juan)
-        - Tarea 2: Enviar el resumen de la reunión a todo el equipo. (Responsable: María)
-        - Tarea 3: Investigar la nueva API. (Responsable: Pedro)
-    """
-    return sample_content
+    logging.info(f"Llamando a la API de Google Docs para leer el documento con ID: {document_id}")
+    
+    try:
+        creds, _ = google.auth.default(scopes=['https://www.googleapis.com/auth/documents.readonly'])
+        service = build('docs', 'v1', credentials=creds)
+        document = service.documents().get(documentId=document_id).execute()
+        
+        content = ""
+        for element in document.get('body', {}).get('content', []):
+            if 'paragraph' in element:
+                for text_run in element['paragraph']['elements']:
+                    content += text_run.get('textRun', {}).get('content', '')
+        
+        title = document.get('title', 'Notas de reunión')
+        
+        return f"TÍTULO DE LA REUNIÓN: {title}\n{content}"
+
+    except HttpError as err:
+        logging.error(f"Error al acceder a Google Docs: {err}")
+        return f"Error: No se pudo acceder al documento con ID {document_id}"
 
 # --- Herramientas para interactuar con Slack ---
 def update_slack_canvas(canvas_id: str, markdown_content: str) -> str:
     """
     Actualiza el contenido de un canvas de Slack existente.
-
-    Args:
-        canvas_id: La ID del canvas de Slack que se va a editar.
-        markdown_content: El texto en formato Markdown para actualizar el canvas.
-
-    Returns:
-        Un mensaje de confirmación o error de la API de Slack.
     """
     if not SLACK_API_TOKEN:
         return "Error: SLACK_API_TOKEN no configurado."
@@ -79,14 +88,6 @@ def update_slack_canvas(canvas_id: str, markdown_content: str) -> str:
 def create_slack_canvas(channel_id: str, title: str, markdown_content: str) -> str:
     """
     Crea un nuevo canvas de Slack en un canal específico.
-
-    Args:
-        channel_id: La ID del canal de Slack donde se creará el canvas.
-        title: El título del nuevo canvas.
-        markdown_content: El texto en formato Markdown para el nuevo canvas.
-
-    Returns:
-        Un mensaje de confirmación o error de la API de Slack.
     """
     if not SLACK_API_TOKEN:
         return "Error: SLACK_API_TOKEN no configurado."
@@ -112,49 +113,79 @@ def create_slack_canvas(channel_id: str, title: str, markdown_content: str) -> s
     except requests.exceptions.RequestException as e:
         return f"Error API Slack: {e}"
 
-# --- 3. Definición del agente principal ---
-async def main():
-    # Validar que todas las variables de entorno necesarias están configuradas
-    if not GOOGLE_DOCS_ID:
-        print("Error: La variable de entorno GOOGLE_DOCS_ID no está configurada.")
-        return
-    if not SLACK_API_TOKEN:
-        print("Error: La variable de entorno SLACK_API_TOKEN no está configurada.")
-        return
+# --- Definición del agente principal ---
+meeting_notes_agent = LlmAgent(
+    name="meeting_notes_agent",
+    model="gemini-2.5-pro",
+    description="Agente que procesa notas de reuniones para crear/actualizar canvas en Slack.",
+    instruction=(
+        "Tu tarea es procesar las notas de una reunión, extraer las tareas pendientes y generar "
+        "solo el contenido de las notas en formato Markdown. No generes JSON. "
+        "Usa '#' para el título principal y '##' para secciones. "
+        "Las tareas pendientes deben ir en listas con '-' y mencionar al responsable en negrita. "
+        "Usa la herramienta 'get_notes_from_google_docs' primero para obtener el contenido en texto plano."
+    ),
+    output_key="meeting_notes",
+    tools=[get_notes_from_google_docs, update_slack_canvas, create_slack_canvas]
+)
+# Creación de la app para Uvicorn (con Flask)
+app = AdkApp(agent=meeting_notes_agent)
+
+# --- Endpoint HTTP para el webhook de Drive ---
+# @app.route("/", methods=["POST"])
+# async def drive_webhook():
+#     """Maneja las notificaciones push de la API de Drive."""
+#     document_id = request.headers.get("X-Goog-Resource-Id")
+#     if not document_id:
+#         return jsonify({"message": "Notificación de Drive recibida, pero sin ID de documento."}), 200
+
+#     logging.info(f"Notificación de Drive recibida para el documento: {document_id}")
     
-    # Decidir qué caso de uso ejecutar
-    if SLACK_CHANNEL_ID:
-        # Ejemplo para crear un nuevo canvas
-        query_to_run = (f"Crea un nuevo canvas en el canal '{SLACK_CHANNEL_ID}' con las notas del "
-                           f"documento '{GOOGLE_DOCS_ID}'.")
-    elif SLACK_CANVAS_ID:
-        # Ejemplo para actualizar un canvas existente
-        query_to_run = (f"Actualiza el canvas '{SLACK_CANVAS_ID}' con las notas del "
-                           f"documento '{GOOGLE_DOCS_ID}'.")
-    else:
-        print("Error: Debes configurar SLACK_CHANNEL_ID o SLACK_CANVAS_ID.")
-        return
+#     title, document_content = get_notes_from_google_docs(document_id)
 
-    meeting_notes_agent = LlmAgent(
-        name="meeting_notes_agent",
-        model="gemini-2.5-pro",
-        description="Un asistente que procesa notas de reuniones para crear o actualizar canvases en Slack.",
-        instruction="""
-        Tu tarea es procesar las notas de una reunión, extraer las tareas pendientes y generar solo el contenido de las notas en formato Markdown. No generes JSON.
-        Usa '#' para el título principal y '##' para secciones.
-        Las tareas pendientes deben ir en listas con '-' y mencionar al responsable en negrita.
-        Usa la herramienta 'get_notes_from_google_docs' primero para obtener el contenido en texto plano.
-        """,
-        output_key="meeting_notes",
-        tools=[get_notes_from_google_docs, update_slack_canvas, create_slack_canvas]
-    )
+#     if "Error" in title:
+#         return jsonify({"message": f"Error al procesar el documento: {document_content}"}), 500
 
-    # --- 4. Ejecución del agente con la consulta seleccionada ---
-    app = AdkApp(agent=meeting_notes_agent)
+#     if SLACK_CHANNEL_ID:
+#         query = f"Crea un nuevo canvas en el canal '{SLACK_CHANNEL_ID}' con el título '{title}' y las notas '{document_content}'."
+#     elif SLACK_CANVAS_ID:
+#         query = f"Actualiza el canvas '{SLACK_CANVAS_ID}' con las notas '{document_content}'."
+#     else:
+#         return jsonify({"message": "Error: SLACK_CANVAS_ID o SLACK_CHANNEL_ID no configurado."}), 500
+
+#     response_generator = app.async_stream_query(query=query)
     
-    print(f"\n--- Ejecutando agente con la siguiente consulta: {query_to_run} ---")
-    async for event in app.async_stream_query(message=query_to_run, user_id="123"):
-        print(event)
+#     final_response = "El agente está trabajando..."
+#     async for event in response_generator:
+#         if event.response:
+#             final_response = event.response
+#             logging.info(f"Respuesta final del agente: {final_response}")
+#             break
 
+#     return jsonify({"message": final_response}), 200
+
+# --- Lógica de prueba local ---
 if __name__ == "__main__":
-    asyncio.run(main())
+    async def run_local_test():
+        if not os.environ.get("GOOGLE_DOCS_ID"):
+            print("Error: GOOGLE_DOCS_ID no configurado para pruebas locales.")
+            return
+        if not SLACK_API_TOKEN:
+            print("Error: SLACK_API_TOKEN no configurado para pruebas locales.")
+            return
+
+        if SLACK_CHANNEL_ID:
+            query = (f"Crea un nuevo canvas en el canal '{SLACK_CHANNEL_ID}' con las notas del documento '{GOOGLE_DOCS_ID}'.")
+            print(f"Ejecutando el agente para crear un nuevo canvas en el canal: {SLACK_CHANNEL_ID}")
+        elif SLACK_CANVAS_ID:
+            query = (f"Actualiza el canvas '{SLACK_CANVAS_ID}' con las notas del documento '{GOOGLE_DOCS_ID}'.")
+            print(f"Ejecutando el agente para actualizar el canvas: {SLACK_CANVAS_ID}")
+        else:
+            print("Error: Debes configurar SLACK_CHANNEL_ID o SLACK_CANVAS_ID para pruebas locales. Terminado.")
+            return
+
+        print(f"\n--- Ejecutando agente con la siguiente consulta: {query} ---")
+        async for event in app.async_stream_query(message=query, user_id="local_test"):
+            print("Resultado final:", event)
+        
+    asyncio.run(run_local_test())

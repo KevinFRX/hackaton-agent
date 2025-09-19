@@ -297,6 +297,25 @@ async def get_document_by_id(
             detail=f"Error al obtener documento: {str(e)}"
         )
 
+@app.get("/api/docs/{document_id}/tabs")
+async def get_document_tabs(
+    document_id: str,
+    service: DocsService = Depends(get_authenticated_service)
+):
+    """Get tabs/sections from a specific document"""
+    try:
+        result = await service.get_document_tabs(document_id)
+        return {
+            "success": True,
+            "data": result,
+            "message": f"Tabs obtenidos correctamente: {result.get('total_tabs', 0)} tabs encontrados"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al obtener tabs del documento: {str(e)}"
+        )
+
 # --- Nuevos endpoints para el agente ADK ---
 
 @app.post("/api/agent/process-meeting-notes")

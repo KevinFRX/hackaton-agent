@@ -101,6 +101,184 @@ class DocsService:
             
         except Exception as e:
             raise Exception(f"Error al obtener documento por nombre: {str(e)}")
+    
+    async def get_document_tabs(self, document_id: str) -> Dict[str, Any]:
+        """Get tabs/sections structure from a Google Docs document"""
+        try:
+            await self._initialize_services()
+            
+            # Get the document
+            doc = self.docs_service.documents().get(documentId=document_id).execute()
+            
+            # Extract tabs/sections from the document structure
+            tabs = []
+            current_tab = None
+            tab_index = 0
+            
+            # Process document content to identify tabs/sections
+            content = doc.get('body', {}).get('content', [])
+            
+            for element in content:
+                if 'paragraph' in element:
+                    paragraph = element['paragraph']
+                    text_content = self._extract_paragraph_text(paragraph)
+                    
+                    # Check if this looks like a tab/section header
+                    if self._is_tab_header(text_content):
+                        # Save previous tab if exists
+                        if current_tab:
+                            tabs.append(current_tab)
+                        
+                        # Start new tab
+                        current_tab = {
+                            'index': tab_index,
+                            'title': text_content.strip(),
+                            'content': [],
+                            'start_position': element.get('startIndex', 0),
+                            'end_position': element.get('endIndex', 0)
+                        }
+                        tab_index += 1
+                    
+                    # Add content to current tab
+                    if current_tab:
+                        current_tab['content'].append({
+                            'type': 'paragraph',
+                            'text': text_content,
+                            'position': element.get('startIndex', 0)
+                        })
+                        current_tab['end_position'] = element.get('endIndex', 0)
+                
+                elif 'table' in element:
+                    # Handle tables
+                    if current_tab:
+                        table_content = self._extract_table_content(element['table'])
+                        current_tab['content'].append({
+                            'type': 'table',
+                            'data': table_content,
+                            'position': element.get('startIndex', 0)
+                        })
+                        current_tab['end_position'] = element.get('endIndex', 0)
+            
+            # Add the last tab if exists
+            if current_tab:
+                tabs.append(current_tab)
+            
+            # If no tabs found, create a single tab with all content
+            if not tabs:
+                tabs = [{
+                    'index': 0,
+                    'title': 'Documento completo',
+                    'content': self._extract_all_content(content),
+                    'start_position': 0,
+                    'end_position': len(content)
+                }]
+            
+            return {
+                'success': True,
+                'document_id': document_id,
+                'document_title': doc.get('title', 'Sin título'),
+                'tabs': tabs,
+                'total_tabs': len(tabs),
+                'metadata': {
+                    'revision_id': doc.get('revisionId'),
+                    'document_id': document_id
+                }
+            }
+            
+        except HttpError as e:
+            if e.resp.status == 404:
+                raise Exception(f"Documento no encontrado: {document_id}")
+            else:
+                raise Exception(f"Error de Google Docs API: {str(e)}")
+        except Exception as e:
+            raise Exception(f"Error al obtener tabs del documento: {str(e)}")
+    
+    def _is_tab_header(self, text: str) -> bool:
+        """Check if text looks like a tab/section header"""
+        if not text or not text.strip():
+            return False
+        
+        text = text.strip()
+        
+        # Check for common tab/section patterns
+        tab_patterns = [
+            # Numbered sections
+            r'^\d+\.\s+',  # "1. Section"
+            r'^\d+\)\s+',  # "1) Section"
+            # Bullet points that might be tabs
+            r'^[-•*]\s+',  # "- Section", "• Section", "* Section"
+            # All caps (might be headers)
+            r'^[A-Z\s]{3,}$',  # "SECTION TITLE"
+            # Common tab keywords
+            r'^(tab|pestaña|sección|section|parte|part)\s*\d*:?\s*',
+            # Date patterns (common in meeting notes)
+            r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+            # Time patterns
+            r'^\d{1,2}:\d{2}',
+        ]
+        
+        import re
+        for pattern in tab_patterns:
+            if re.match(pattern, text, re.IGNORECASE):
+                return True
+        
+        # Check if text is short and looks like a title
+        if len(text) < 50 and any(keyword in text.lower() for keyword in 
+                                 ['agenda', 'notes', 'meeting', 'reunión', 'summary', 'resumen']):
+            return True
+        
+        return False
+    
+    def _extract_paragraph_text(self, paragraph: Dict) -> str:
+        """Extract text content from a paragraph element"""
+        text_parts = []
+        
+        for element in paragraph.get('elements', []):
+            if 'textRun' in element:
+                text_run = element['textRun']
+                content = text_run.get('content', '')
+                text_parts.append(content)
+        
+        return ''.join(text_parts)
+    
+    def _extract_table_content(self, table: Dict) -> List[List[str]]:
+        """Extract content from a table element"""
+        table_data = []
+        
+        for row in table.get('tableRows', []):
+            row_data = []
+            for cell in row.get('tableCells', []):
+                cell_text = []
+                for content in cell.get('content', []):
+                    if 'paragraph' in content:
+                        cell_text.append(self._extract_paragraph_text(content['paragraph']))
+                row_data.append(' '.join(cell_text).strip())
+            table_data.append(row_data)
+        
+        return table_data
+    
+    def _extract_all_content(self, content: List[Dict]) -> List[Dict]:
+        """Extract all content when no tabs are found"""
+        all_content = []
+        
+        for element in content:
+            if 'paragraph' in element:
+                text = self._extract_paragraph_text(element['paragraph'])
+                if text.strip():
+                    all_content.append({
+                        'type': 'paragraph',
+                        'text': text,
+                        'position': element.get('startIndex', 0)
+                    })
+            elif 'table' in element:
+                table_data = self._extract_table_content(element['table'])
+                all_content.append({
+                    'type': 'table',
+                    'data': table_data,
+                    'position': element.get('startIndex', 0)
+                })
+        
+        return all_content
 
     async def search_documents(self, query: str, page_size: int = 10) -> Dict[str, Any]:
         """Search documents by content"""

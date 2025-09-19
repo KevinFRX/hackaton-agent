@@ -1,0 +1,15 @@
+# Usa una imagen base de Python oficial y ligera
+FROM python:3.12-slim
+
+# Establece el directorio de trabajo dentro del contenedor
+WORKDIR /app
+
+# Copia los archivos de requisitos e instálalos
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copia tu script de registro
+COPY register_watch.py .
+
+# El comando a ejecutar cuando el contenedor se inicie
+CMD ["python", "register_watch.py"]

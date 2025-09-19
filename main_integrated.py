@@ -316,6 +316,121 @@ async def get_document_tabs(
             detail=f"Error al obtener tabs del documento: {str(e)}"
         )
 
+@app.get("/api/docs/{document_id}/tabs/visual")
+async def get_document_tabs_visual(
+    document_id: str,
+    service: DocsService = Depends(get_authenticated_service)
+):
+    """Get tabs in a visual format similar to mobile app interface"""
+    try:
+        result = await service.get_document_tabs(document_id)
+        
+        # Transform tabs into visual format
+        visual_tabs = []
+        
+        for tab in result.get('tabs', []):
+            # Determine tab type and icon based on content
+            tab_type, icon = _determine_tab_type_and_icon(tab)
+            
+            visual_tab = {
+                "id": f"tab_{tab['index']}",
+                "index": tab['index'],
+                "title": tab['title'],
+                "type": tab_type,
+                "icon": icon,
+                "is_active": tab['index'] == 0,  # First tab is active by default
+                "content": {
+                    "text": _extract_tab_text_content(tab),
+                    "word_count": len(_extract_tab_text_content(tab).split()),
+                    "has_content": len(tab.get('content', [])) > 0
+                },
+                "metadata": {
+                    "start_position": tab.get('start_position', 0),
+                    "end_position": tab.get('end_position', 0),
+                    "content_items": len(tab.get('content', []))
+                }
+            }
+            visual_tabs.append(visual_tab)
+        
+        return {
+            "success": True,
+            "data": {
+                "document_id": result.get('document_id'),
+                "document_title": result.get('document_title'),
+                "tabs": visual_tabs,
+                "total_tabs": len(visual_tabs),
+                "active_tab": visual_tabs[0]['id'] if visual_tabs else None,
+                "ui_config": {
+                    "show_add_button": True,
+                    "allow_reorder": True,
+                    "theme": "light"
+                }
+            },
+            "message": f"Tabs visuales generados: {len(visual_tabs)} tabs encontrados"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error al obtener tabs visuales: {str(e)}"
+        )
+
+# --- Funciones auxiliares para tabs visuales ---
+
+def _determine_tab_type_and_icon(tab: dict) -> tuple:
+    """Determine tab type and icon based on content and title"""
+    title = tab.get('title', '').lower()
+    content = _extract_tab_text_content(tab).lower()
+    
+    # Notes tab
+    if any(keyword in title for keyword in ['notes', 'notas', 'summary', 'resumen']):
+        return "notes", "📝"
+    
+    # Transcript tab
+    if any(keyword in title for keyword in ['transcript', 'transcripción', 'details', 'detalles']):
+        return "transcript", "📖"
+    
+    # Meeting tab
+    if any(keyword in title for keyword in ['meeting', 'reunión', 'agenda']):
+        return "meeting", "👥"
+    
+    # Attachments tab
+    if any(keyword in title for keyword in ['attachment', 'adjunto', 'file', 'archivo']):
+        return "attachments", "📎"
+    
+    # Invited tab
+    if any(keyword in title for keyword in ['invited', 'invitado', 'participant', 'participante']):
+        return "participants", "👤"
+    
+    # Records tab
+    if any(keyword in title for keyword in ['record', 'registro', 'log']):
+        return "records", "📋"
+    
+    # Next steps tab
+    if any(keyword in title for keyword in ['next', 'siguiente', 'step', 'paso', 'action', 'acción']):
+        return "actions", "✅"
+    
+    # Default tab
+    return "general", "📄"
+
+def _extract_tab_text_content(tab: dict) -> str:
+    """Extract all text content from a tab"""
+    text_parts = []
+    
+    for content_item in tab.get('content', []):
+        if content_item.get('type') == 'paragraph':
+            text = content_item.get('text', '').strip()
+            if text:
+                text_parts.append(text)
+        elif content_item.get('type') == 'table':
+            # Extract text from table
+            table_data = content_item.get('data', [])
+            for row in table_data:
+                for cell in row:
+                    if cell.strip():
+                        text_parts.append(cell.strip())
+    
+    return ' '.join(text_parts)
+
 # --- Nuevos endpoints para el agente ADK ---
 
 @app.post("/api/agent/process-meeting-notes")

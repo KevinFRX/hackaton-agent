@@ -1,0 +1,20 @@
+# FastAPI y servidor web (versiones compatibles con ADK)
+fastapi>=0.110.0
+uvicorn>=0.24.0
+pydantic>=2.5.0
+python-multipart>=0.0.6
+
+# Google APIs y autenticación
+google-api-python-client>=2.108.0
+google-auth>=2.23.4
+google-auth-oauthlib>=1.1.0
+google-auth-httplib2>=0.1.1
+google-cloud-aiplatform
+
+# Google ADK (Agent Development Kit)
+google-adk>=1.14.0
+litellm
+
+# Utilidades
+python-dotenv>=1.0.0
+requests

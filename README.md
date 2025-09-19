@@ -1,223 +1,219 @@
-# Google Docs API - Python
+# MeetToTask - Google Docs Monitoring System
 
-Una API de Python que se conecta con Google Docs y permite leer documentos de forma programática usando FastAPI.
+A comprehensive Python API system for monitoring Google Docs changes with real-time notifications via Slack, email, and webhooks.
 
-## Características
+## 🚀 Features
 
-- 🐍 **Python + FastAPI** - Framework moderno y rápido
-- 🔐 **Autenticación con gcloud CLI** - Simple y directo
-- 📖 **Lectura de documentos** de Google Docs
-- 🔍 **Búsqueda de documentos** por contenido
-- 📝 **Extracción de texto** plano y formateado
-- 🗂️ **Listado de documentos** disponibles
-- 📊 **Metadatos** y elementos estructurados
-- 🚀 **Documentación automática** con Swagger UI
+### 📄 Google Docs Integration
+- **Service Account Authentication** - Secure access using Google Service Account
+- **Document Reading** - Read and parse Google Docs content
+- **Change Detection** - Real-time monitoring of document modifications
+- **Folder Monitoring** - Monitor entire folders for new documents
 
-## Instalación
+### 🔔 Notification System
+- **Slack Integration** - Real-time notifications to Slack channels
+- **Email Notifications** - SMTP-based email alerts
+- **Webhook Support** - Custom webhook endpoints for notifications
+- **Multiple Channels** - Send notifications to multiple destinations simultaneously
 
-### 1. Instalar dependencias
+### 🔍 Monitoring Capabilities
+- **Webhook-based Detection** - Real-time change detection using Google Drive webhooks
+- **Polling System** - Periodic checking with configurable intervals
+- **Folder Discovery** - Automatic detection of new documents in monitored folders
+- **Change History** - Complete audit trail of all document changes
 
-```bash
-pip install -r requirements.txt
-```
+### 🤖 AI Integration
+- **Google ADK Integration** - AI-powered document processing
+- **Gemini 2.5 Pro** - Advanced document analysis and processing
+- **Meeting Notes Processing** - Automatic extraction and processing of meeting notes
 
-### 2. Configurar autenticación con Google Cloud
+## 📋 API Endpoints
 
-```bash
-# Autenticarse con Google Cloud
-gcloud auth login
+### Authentication
+- `GET /api/auth/status` - Check authentication status
+- `POST /api/auth/init` - Initialize authentication
 
-# Configurar el proyecto
-gcloud config set project docdash-ai-dev
+### Document Management
+- `GET /api/docs` - List available documents
+- `GET /api/docs/{document_id}` - Get specific document content
 
-# Configurar Application Default Credentials
-gcloud auth application-default login
-```
+### Change Detection
+- `POST /api/changes/init` - Initialize change detection services
+- `GET /api/changes/check/{document_id}` - Check for changes in specific document
+- `GET /api/changes/history` - Get change history
 
-### 3. Habilitar APIs necesarias
+### Webhook Management
+- `POST /api/changes/webhook/setup` - Setup webhook for document
+- `DELETE /api/changes/webhook/{document_id}` - Remove webhook
+- `GET /api/changes/webhooks` - List active webhooks
+- `POST /api/changes/webhook/receive` - Receive webhook notifications
 
-```bash
-# Habilitar Google Docs API
-gcloud services enable docs.googleapis.com
+### Polling System
+- `POST /api/changes/polling/add` - Add document to polling
+- `DELETE /api/changes/polling/{document_id}` - Remove document from polling
+- `GET /api/changes/polling/status` - Get polling status
+- `GET /api/changes/polling/documents` - List documents in polling
 
-# Habilitar Google Drive API
-gcloud services enable drive.googleapis.com
-```
+### Folder Monitoring
+- `POST /api/changes/folder/webhook/setup` - Setup folder webhook
+- `DELETE /api/changes/folder/webhook/{folder_id}` - Remove folder webhook
+- `GET /api/changes/folder/webhooks` - List folder webhooks
+- `POST /api/changes/folder/polling/add` - Add folder to polling
+- `DELETE /api/changes/folder/polling/{folder_id}` - Remove folder from polling
+- `GET /api/changes/folder/check/{folder_id}` - Check folder for new documents
+- `GET /api/changes/folder/documents/{folder_id}` - List documents in folder
 
-## Uso
+### Notifications
+- `GET /api/notifications/history` - Get notification history
+- `GET /api/notifications/stats` - Get notification statistics
+- `POST /api/notifications/webhook/add` - Add notification webhook endpoint
 
-### Iniciar el servidor
+### AI Agent
+- `POST /api/agent/process-meeting-notes` - Process meeting notes with AI
+- `POST /api/agent/process-document` - Process document with AI
 
-```bash
-# Desarrollo
-python main.py
+## 🛠️ Installation
 
-# O con uvicorn directamente
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
+### Prerequisites
+- Python 3.8+
+- Google Cloud Project with Google Docs API enabled
+- Google Service Account with appropriate permissions
+- Slack App with Bot Token (optional)
+- SMTP server for email notifications (optional)
 
-El servidor estará disponible en:
-- **API**: http://localhost:8000
-- **Documentación**: http://localhost:8000/docs
-- **Health Check**: http://localhost:8000/health
+### Setup
 
-## Endpoints de la API
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd MeetToTask
+   ```
 
-### Autenticación
+2. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-- `GET /api/auth/status` - Verificar estado de autenticación
-- `POST /api/auth/init` - Inicializar autenticación
+3. **Configure environment variables**
+   ```bash
+   cp env.example .env
+   # Edit .env with your configuration
+   ```
 
-### Documentos
+4. **Setup Google Service Account**
+   - Create a Service Account in Google Cloud Console
+   - Download the JSON key file
+   - Place it as `service-account-key.json` in the project root
+   - Update `GOOGLE_SERVICE_ACCOUNT_PATH` in `.env`
 
-- `GET /api/docs` - Listar todos los documentos
-- `GET /api/docs/{document_id}` - Obtener documento por ID
-- `GET /api/docs/name/{document_name}` - Obtener documento por nombre
-- `GET /api/docs/search/{query}` - Buscar documentos por contenido
-- `GET /api/docs/{document_id}/text` - Obtener texto plano del documento
-- `GET /api/docs/{document_id}/elements` - Obtener elementos estructurados
-- `GET /api/docs/{document_id}/metadata` - Obtener metadatos del documento
+5. **Configure Slack (optional)**
+   - Create a Slack App at https://api.slack.com/apps
+   - Get Bot Token (starts with `xoxb-`)
+   - Get Channel ID from Slack
+   - Update `SLACK_API_TOKEN` and `SLACK_CHANNEL_ID` in `.env`
 
-### Parámetros de consulta
+6. **Run the application**
+   ```bash
+   python3 main_integrated.py
+   ```
 
-- `page_size` - Número de documentos por página (default: 10)
-- `page_token` - Token para paginación
-- `format` - Formato de respuesta: `full`, `text`, `metadata`
+## ⚙️ Configuration
 
-## Ejemplos de uso
-
-### 1. Verificar autenticación
-
-```bash
-curl http://localhost:8000/api/auth/status
-```
-
-### 2. Listar documentos
-
-```bash
-curl http://localhost:8000/api/docs
-```
-
-### 3. Obtener documento por ID
-
-```bash
-curl http://localhost:8000/api/docs/DOCUMENT_ID
-```
-
-### 4. Obtener solo texto plano
-
-```bash
-curl http://localhost:8000/api/docs/DOCUMENT_ID/text
-```
-
-### 5. Buscar documentos
-
-```bash
-curl http://localhost:8000/api/docs/search/TERMINO_DE_BUSQUEDA
-```
-
-## Estructura del proyecto
-
-```
-├── services/
-│   ├── __init__.py
-│   ├── auth_service.py      # Servicio de autenticación
-│   └── docs_service.py      # Servicio para Google Docs
-├── main.py                  # Aplicación principal FastAPI
-├── requirements.txt         # Dependencias Python
-├── .env                     # Variables de entorno
-└── README.md               # Este archivo
-```
-
-## Dependencias principales
-
-- **FastAPI** - Framework web moderno y rápido
-- **google-api-python-client** - SDK oficial de Google APIs
-- **google-auth** - Autenticación con Google
-- **uvicorn** - Servidor ASGI
-- **python-dotenv** - Carga de variables de entorno
-
-## Respuestas de la API
-
-### Respuesta exitosa:
-```json
-{
-  "success": true,
-  "data": { ... },
-  "message": "Mensaje descriptivo"
-}
-```
-
-### Respuesta de error:
-```json
-{
-  "success": false,
-  "error": "Descripción del error",
-  "status_code": 500
-}
-```
-
-## Desarrollo
-
-### Variables de entorno
-
-```env
-PORT=8000
-HOST=0.0.0.0
-DEBUG=True
-GOOGLE_CLOUD_PROJECT=docdash-ai-dev
-```
-
-### Comandos útiles
+### Environment Variables
 
 ```bash
-# Instalar dependencias
-pip install -r requirements.txt
+# Google Cloud Configuration
+GOOGLE_CLOUD_PROJECT=your-project-id
+GOOGLE_SERVICE_ACCOUNT_PATH=./service-account-key.json
 
-# Ejecutar en modo desarrollo
-python main.py
+# Slack Configuration
+SLACK_API_TOKEN=xoxb-your-bot-token
+SLACK_CHANNEL_ID=C1234567890
 
-# Ejecutar con uvicorn
-uvicorn main:app --reload
+# Email Configuration (optional)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+EMAIL_USERNAME=your-email@gmail.com
+EMAIL_PASSWORD=your-app-password
+FROM_EMAIL=your-email@gmail.com
 
-# Ver documentación interactiva
-# Abrir http://localhost:8000/docs en el navegador
+# Change Detection Configuration
+WEBHOOK_BASE_URL=http://localhost:8000
+NOTIFICATION_EMAIL=your-email@domain.com
+
+# Folder Configuration
+FOLDER_ID=your-google-drive-folder-id
 ```
 
-## Solución de problemas
+## 🧪 Usage Examples
 
-### Error de autenticación
-
-Si recibes errores de autenticación:
-
+### Monitor a Document
 ```bash
-# Re-autenticarse
-gcloud auth application-default login
+# Add document to polling
+curl -X POST "http://localhost:8000/api/changes/polling/add?document_id=DOC_ID&interval_seconds=300"
 
-# Verificar proyecto
-gcloud config get-value project
-
-# Verificar APIs habilitadas
-gcloud services list --enabled
+# Check for changes manually
+curl "http://localhost:8000/api/changes/check/DOC_ID"
 ```
 
-### Error de permisos
-
-Asegúrate de que las APIs estén habilitadas:
-
+### Monitor a Folder
 ```bash
-gcloud services enable docs.googleapis.com
-gcloud services enable drive.googleapis.com
+# Add folder to polling
+curl -X POST "http://localhost:8000/api/changes/folder/polling/add?folder_id=FOLDER_ID&interval_seconds=300"
+
+# Check folder for new documents
+curl "http://localhost:8000/api/changes/folder/check/FOLDER_ID"
 ```
 
-## Licencia
+### Setup Webhook
+```bash
+# Setup webhook for real-time notifications
+curl -X POST "http://localhost:8000/api/changes/webhook/setup?document_id=DOC_ID&webhook_url=https://your-app.com/webhook"
+```
 
-MIT
+## 📊 Monitoring
 
-## Contribuir
+### Check System Status
+```bash
+# Get polling status
+curl "http://localhost:8000/api/changes/polling/status"
 
-1. Fork el proyecto
-2. Crea una rama para tu feature (`git checkout -b feature/AmazingFeature`)
-3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
-4. Push a la rama (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
+# Get notification statistics
+curl "http://localhost:8000/api/notifications/stats"
+
+# Get change history
+curl "http://localhost:8000/api/changes/history"
+```
+
+## 🔧 Architecture
+
+### Services
+- **AuthService** - Google authentication management
+- **DocsService** - Google Docs API integration
+- **ChangeDetectionService** - Change detection and webhook management
+- **NotificationService** - Multi-channel notification system
+- **PollingService** - Automated polling and monitoring
+
+### Key Features
+- **Async/Await** - Full async support for high performance
+- **Error Handling** - Comprehensive error handling and logging
+- **Configurable Intervals** - Customizable polling intervals
+- **Multi-channel Notifications** - Slack, email, and webhook support
+- **Change History** - Complete audit trail
+- **Service Account Auth** - Secure authentication without user interaction
+
+## 📝 License
+
+This project is licensed under the MIT License.
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📞 Support
+
+For support and questions, please open an issue in the repository.
